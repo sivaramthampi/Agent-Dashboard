@@ -8,6 +8,7 @@ import { ChartsSection } from "./charts/ChartsSection";
 import { AlertBanner } from "./AlertBanner";
 import { AgentWrapupTable } from "./tables/AgentWrapupTable";
 import { AvgWaitByQueueTable } from "./tables/AvgWaitByQueueTable";
+import { TrendChart } from "./charts/TrendChart";
 import { fetchKpis, KpiValues } from "../data/kpis";
 import { fetchOngoingConversations } from "../data/conversations";
 import { fetchAgentSnapshot, fetchAgentOptions, deriveAgentRows, deriveAgentsLoggedInCount, derivePresenceBreakdown, PresenceBreakdownItem, fetchAgentWrapupMetrics, AgentWrapupRow, fetchRealAgentIds } from "../data/agents";
@@ -386,14 +387,22 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
                 selectedRowId={selectedRowId} onSelectRow={setSelectedRowId}
                 agents={agents} agentsLoading={agentsLoading}
                 presenceBreakdown={presenceBreakdown}
+                statusBreakdown={statusBreakdown} statusLoading={statusLoading}
             />
+            <AgentWrapupTable rows={wrapupRows} isLoading={wrapupLoading} />
             <div className="ad-two-col-panels">
                 <AvgWaitByQueueTable rows={queueWaits} isLoading={queueWaitsLoading} />
-                <AgentWrapupTable rows={wrapupRows} isLoading={wrapupLoading} />
+                <div className="ad-panel ad-chart-panel">
+                    <div className="ad-panel-head">
+                        <h3>Conversations Over Time</h3>
+                        <span className="ad-panel-meta">Hover to inspect</span>
+                    </div>
+                    <div className="ad-panel-body">
+                        <TrendChart points={trend} isLoading={trendLoading} />
+                    </div>
+                </div>
             </div>
             <ChartsSection
-                trend={trend} trendLoading={trendLoading}
-                statusBreakdown={statusBreakdown} statusLoading={statusLoading}
                 hourly={hourly} hourlyLoading={hourlyLoading}
                 sentimentData={sentimentData} sentimentLoading={sentimentLoading}
             />

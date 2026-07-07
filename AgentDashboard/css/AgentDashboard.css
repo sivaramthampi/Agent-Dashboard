@@ -426,12 +426,15 @@
 .ad-donut-center-text { fill: var(--text); font-size: 13px; font-weight: 500; }
 
 /* ── Live activity tables ── */
-.ad-tables { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; align-items: start; margin-bottom: 10px; }
+.ad-tables { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; align-items: stretch; margin-bottom: 10px; }
 .ad-tables-side { display: flex; flex-direction: column; gap: 10px; }
+.ad-tables > .ad-panel { display: flex; flex-direction: column; }
+.ad-tables-side > .ad-panel { flex: 1; display: flex; flex-direction: column; }
+.ad-tables .ad-panel-body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 
-/* scrollable table body — 6 rows then scroll */
-.ad-table-scroll { max-height: 220px; overflow-y: auto; }
-.ad-table-scroll-lg { max-height: 260px; overflow-y: auto; }
+/* fixed-height scrollable table body — stays constant regardless of row count */
+.ad-table-scroll { height: 220px; overflow-y: auto; }
+.ad-table-scroll-lg { height: 260px; overflow-y: auto; }
 .ad-table-scroll::-webkit-scrollbar { width: 4px; }
 .ad-table-scroll::-webkit-scrollbar-track { background: transparent; }
 .ad-table-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,.15); border-radius: 4px; }
@@ -466,6 +469,14 @@
 
 .ad-mono { font-variant-numeric: tabular-nums; font-family: "Consolas","Cascadia Mono",monospace; font-size: 11.5px; }
 .ad-align-right { text-align: right; }
+
+/* ── Sortable table headers ── */
+.ad-th-sortable { cursor: pointer; user-select: none; }
+.ad-th-sortable:hover { color: var(--text-dim); background: rgba(0,0,0,.03); }
+.ad-th-sortable-inner { display: inline-flex; align-items: center; gap: 4px; }
+.ad-align-right .ad-th-sortable-inner { flex-direction: row-reverse; }
+.ad-sort-arrow { font-size: 9px; opacity: .45; }
+.ad-sort-arrow-active { opacity: 1; color: var(--blue); }
 
 /* ── Status / direction badges ── */
 .ad-badge {
@@ -632,6 +643,12 @@
 }
 .ad-two-col-panels .ad-table-scroll {
     flex: 1;
+}
+.ad-two-col-panels .ad-panel-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 /* ── Agent list row alert (duration in status) ── */

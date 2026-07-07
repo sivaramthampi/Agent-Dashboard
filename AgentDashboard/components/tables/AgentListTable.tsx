@@ -1,6 +1,8 @@
 import * as React from "react";
 import { AgentRow } from "../../types";
 import { PresenceBreakdownItem } from "../../data/agents";
+import { SortableHeader } from "./SortableHeader";
+import { durationComparator, stringComparator, useSortableRows } from "../../data/sortUtils";
 
 export interface AgentListTableProps {
     rows: AgentRow[];
@@ -41,9 +43,6 @@ function rowAlertClass(durationStr: string): string {
     return "";
 }
 
-// Fixed 5 presence states always shown in order — even if count is 0
-// `matches` lists the raw (lowercased) presence values that count toward this card;
-// used for both the displayed count AND the click-to-filter behavior, so the two stay in sync.
 const STRIP_STATES = [
     { key: "available", label: "Available", color: "#22C55E", matches: ["available"] },
     { key: "busy",      label: "Busy",      color: "#EF4444", matches: ["busy", "busy - dnd", "busydnd"] },
@@ -51,6 +50,12 @@ const STRIP_STATES = [
     { key: "away",      label: "Away",      color: "#F59E0B", matches: ["away"] },
     { key: "project",   label: "Project",   color: "#818CF8", matches: ["project"] },
 ];
+
+const COMPARATORS = {
+    name:     stringComparator<AgentRow>(r => r.name ?? r.id),
+    status:   stringComparator<AgentRow>(r => r.status),
+    duration: durationComparator<AgentRow>(r => r.duration),
+};
 
 export const AgentListTable: React.FC<AgentListTableProps> = ({ rows, isLoading, presenceBreakdown }) => {
     // Which stat card (if any) is currently active as a filter. Single-select —
@@ -76,6 +81,8 @@ export const AgentListTable: React.FC<AgentListTableProps> = ({ rows, isLoading,
     const visibleRows = activeState
         ? rows.filter(r => activeState.matches.includes(r.status.toLowerCase()))
         : rows;
+
+    const { sortedRows, sortKey, direction, onSort } = useSortableRows(visibleRows, COMPARATORS);
 
     const totalLoggedIn = rows.length;
 
@@ -124,9 +131,9 @@ export const AgentListTable: React.FC<AgentListTableProps> = ({ rows, isLoading,
                 <table className="ad-table">
                     <thead>
                         <tr>
-                            <th>Agent</th>
-                            <th>Status</th>
-                            <th>Duration</th>
+                            <SortableHeader label="Agent" sortKey="name" activeKey={sortKey} direction={direction} onSort={onSort} />
+                            <SortableHeader label="Status" sortKey="status" activeKey={sortKey} direction={direction} onSort={onSort} />
+                            <SortableHeader label="Duration" sortKey="duration" activeKey={sortKey} direction={direction} onSort={onSort} />
                         </tr>
                     </thead>
                     <tbody>
@@ -136,7 +143,7 @@ export const AgentListTable: React.FC<AgentListTableProps> = ({ rows, isLoading,
                                 {activeState ? `No agents in "${activeState.label}"` : "No agents online"}
                             </td></tr>
                         )}
-                        {!isLoading && visibleRows.map(row => (
+                        {!isLoading && sortedRows.map(row => (
                             <tr key={row.id} className={rowAlertClass(row.duration)}>
                                 <td>{row.name ?? row.id}</td>
                                 <td>

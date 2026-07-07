@@ -1,5 +1,7 @@
 import * as React from "react"; // React used for JSX
 import { AgentWrapupRow } from "../../data/agents";
+import { SortableHeader } from "./SortableHeader";
+import { numberComparator, stringComparator, useSortableRows } from "../../data/sortUtils";
 
 function fmt(sec: number): string {
     const h = Math.floor(sec / 3600);
@@ -72,7 +74,31 @@ function rankWatermark(idx: number): string {
 
 interface Props { rows: AgentWrapupRow[]; isLoading: boolean; }
 
-export const AgentWrapupTable: React.FC<Props> = ({ rows, isLoading }) => (
+// Rows arrive pre-sorted by performanceScore (desc) from the data layer — that
+// order is what drives the gold/silver/bronze medal styling. We freeze that as
+// `_rank` before the user applies any column sort, so the medals always refer
+// to the actual leaderboard position regardless of how the table is displayed.
+type RankedRow = AgentWrapupRow & { _rank: number };
+
+const COMPARATORS = {
+    agent:   stringComparator<RankedRow>(r => r.agentName),
+    convs:   numberComparator<RankedRow>(r => r.conversations),
+    avgHandle:   numberComparator<RankedRow>(r => r.avgHandleSec),
+    totalHandle: numberComparator<RankedRow>(r => r.totalHandleSec),
+    avgWrapup:   numberComparator<RankedRow>(r => r.avgWrapupSec),
+    totalWrapup: numberComparator<RankedRow>(r => r.totalWrapupSec),
+    sentiment:   numberComparator<RankedRow>(r => r.avgSentiment ?? -Infinity),
+    score:       numberComparator<RankedRow>(r => r.performanceScore),
+};
+
+export const AgentWrapupTable: React.FC<Props> = ({ rows, isLoading }) => {
+    const rankedRows: RankedRow[] = React.useMemo(
+        () => rows.map((r, idx) => ({ ...r, _rank: idx })),
+        [rows]
+    );
+    const { sortedRows, sortKey, direction, onSort } = useSortableRows(rankedRows, COMPARATORS);
+
+    return (
     <div className="ad-panel">
         <div className="ad-panel-head">
             <h3>Agent Stats</h3>
@@ -92,31 +118,31 @@ export const AgentWrapupTable: React.FC<Props> = ({ rows, isLoading }) => (
                 </colgroup>
                 <thead>
                     <tr>
-                        <th>Agent</th>
-                        <th>Convs</th>
-                        <th>Avg Handle</th>
-                        <th>Total Handle</th>
-                        <th>Avg Wrap-up</th>
-                        <th>Total Wrap-up</th>
-                        <th>Sentiment</th>
-                        <th>Score</th>
+                        <SortableHeader label="Agent" sortKey="agent" activeKey={sortKey} direction={direction} onSort={onSort} />
+                        <SortableHeader label="Convs" sortKey="convs" activeKey={sortKey} direction={direction} onSort={onSort} align="right" />
+                        <SortableHeader label="Avg Handle" sortKey="avgHandle" activeKey={sortKey} direction={direction} onSort={onSort} align="right" />
+                        <SortableHeader label="Total Handle" sortKey="totalHandle" activeKey={sortKey} direction={direction} onSort={onSort} align="right" />
+                        <SortableHeader label="Avg Wrap-up" sortKey="avgWrapup" activeKey={sortKey} direction={direction} onSort={onSort} align="right" />
+                        <SortableHeader label="Total Wrap-up" sortKey="totalWrapup" activeKey={sortKey} direction={direction} onSort={onSort} align="right" />
+                        <SortableHeader label="Sentiment" sortKey="sentiment" activeKey={sortKey} direction={direction} onSort={onSort} align="right" />
+                        <SortableHeader label="Score" sortKey="score" activeKey={sortKey} direction={direction} onSort={onSort} align="right" />
                     </tr>
                 </thead>
                 <tbody>
                     {isLoading && <tr><td colSpan={8} className="ad-table-empty">Loading…</td></tr>}
-                    {!isLoading && rows.length === 0 && (
+                    {!isLoading && sortedRows.length === 0 && (
                         <tr><td colSpan={8} className="ad-table-empty">No data for this period</td></tr>
                     )}
-                    {!isLoading && rows.map((row, idx) => (
-                        <tr key={row.agentId} className={[rowAlertClass(row.avgWrapupSec), rankClass(idx)].filter(Boolean).join(" ")}>
+                    {!isLoading && sortedRows.map((row) => (
+                        <tr key={row.agentId} className={[rowAlertClass(row.avgWrapupSec), rankClass(row._rank)].filter(Boolean).join(" ")}>
                             <td>
                                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                                    <AgentAvatar name={row.agentName} rank={rankClass(idx).replace("ad-rank-","")} />
+                                    <AgentAvatar name={row.agentName} rank={rankClass(row._rank).replace("ad-rank-","")} />
                                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                         {row.agentName}
                                     </span>
-                                    {rankWatermark(idx) && (
-                                        <span className="ad-rank-watermark">{rankWatermark(idx)}</span>
+                                    {rankWatermark(row._rank) && (
+                                        <span className="ad-rank-watermark">{rankWatermark(row._rank)}</span>
                                     )}
                                 </div>
                             </td>
@@ -152,4 +178,5 @@ export const AgentWrapupTable: React.FC<Props> = ({ rows, isLoading }) => (
             <span>&gt;10 min wrap-up</span>
         </div>
     </div>
-);
+    );
+};

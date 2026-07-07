@@ -1,5 +1,7 @@
 import * as React from "react";
 import { ConversationRow } from "../../types";
+import { SortableHeader } from "./SortableHeader";
+import { durationComparator, stringComparator, useSortableRows } from "../../data/sortUtils";
 
 export interface OngoingConversationsTableProps {
     rows: ConversationRow[];
@@ -15,11 +17,20 @@ const STATUS_CLASS: Record<string, string> = {
     "Wrap-up": "wrapup"
 };
 
+const COMPARATORS = {
+    contact:   stringComparator<ConversationRow>(r => r.contactName),
+    status:    stringComparator<ConversationRow>(r => r.status),
+    agent:     stringComparator<ConversationRow>(r => r.activeAgent),
+    queue:     stringComparator<ConversationRow>(r => r.queue),
+    modified:  durationComparator<ConversationRow>(r => r.lastModified),
+    direction: stringComparator<ConversationRow>(r => r.direction),
+};
 
 // Inline sentiment icon for table
 export const OngoingConversationsTable: React.FC<OngoingConversationsTableProps> = ({
     rows, isLoading, hasError, selectedRowId, onSelectRow
 }) => {
+    const { sortedRows, sortKey, direction, onSort } = useSortableRows(rows, COMPARATORS);
     const selectedRow = rows.find(r => r.id === selectedRowId) ?? null;
 
     function handleRowClick(id: string) {
@@ -37,12 +48,12 @@ export const OngoingConversationsTable: React.FC<OngoingConversationsTableProps>
             <table className="ad-table">
                 <thead>
                     <tr>
-                        <th>Contact</th>
-                        <th>Status</th>
-                        <th>Active Agent</th>
-                        <th>Queue</th>
-                        <th>Last Modified</th>
-                        <th>Direction</th>
+                        <SortableHeader label="Contact" sortKey="contact" activeKey={sortKey} direction={direction} onSort={onSort} />
+                        <SortableHeader label="Status" sortKey="status" activeKey={sortKey} direction={direction} onSort={onSort} />
+                        <SortableHeader label="Active Agent" sortKey="agent" activeKey={sortKey} direction={direction} onSort={onSort} />
+                        <SortableHeader label="Queue" sortKey="queue" activeKey={sortKey} direction={direction} onSort={onSort} />
+                        <SortableHeader label="Last Modified" sortKey="modified" activeKey={sortKey} direction={direction} onSort={onSort} />
+                        <SortableHeader label="Direction" sortKey="direction" activeKey={sortKey} direction={direction} onSort={onSort} />
                         <th></th>
                     </tr>
                 </thead>
@@ -56,7 +67,7 @@ export const OngoingConversationsTable: React.FC<OngoingConversationsTableProps>
                     {!isLoading && !hasError && rows.length === 0 && (
                         <tr><td colSpan={7} className="ad-table-empty">No ongoing conversations</td></tr>
                     )}
-                    {!isLoading && !hasError && rows.map(row => {
+                    {!isLoading && !hasError && sortedRows.map(row => {
                         const parts = row.lastModified.split(":").map(Number);
                         const mins = parts.length >= 2 ? (parts.length === 3 ? parts[0] * 60 + parts[1] : parts[0]) : 0;
                         const isUnassigned = row.activeAgent === "Unassigned";
