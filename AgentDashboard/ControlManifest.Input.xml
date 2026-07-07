@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="CR.PCF" constructor="AgentDashboard" version="1.0.53" display-name-key="AgentDashboard" description-key="AgentDashboard description" control-type="standard" >
+    <external-service-usage enabled="false">
+    </external-service-usage>
+
+    <!-- Kept as a required bound property so the control can be placed on a form;
+         not used for data, just satisfies the platform's binding requirement. -->
+    <property name="sampleProperty" display-name-key="Property_Display_Key" description-key="Property_Desc_Key" of-type="SingleLine.Text" usage="bound" required="true" />
+
+    <!-- Refresh interval in seconds, configurable per-form without redeploying code -->
+    <property name="refreshIntervalSeconds" display-name-key="Refresh Interval (seconds)" description-key="How often the dashboard polls Dataverse for updated data" of-type="Whole.None" usage="input" required="false" default-value="15" />
+
+    <resources>
+      <code path="index.ts" order="1"/>
+      <css path="css/AgentDashboard.css" order="1" />
+    </resources>
+
+    <feature-usage>
+      <uses-feature name="WebAPI" required="true" />
+    </feature-usage>
+  </control>
+</manifest>
