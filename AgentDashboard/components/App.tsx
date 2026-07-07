@@ -29,8 +29,8 @@ export interface AppProps {
 
 const TILE_DEFS: Omit<KpiTileData, "displayValue">[] = [
     { key: "total",         label: "Total Conversations",    icon: "💬", cssClass: "total",    row: 1 },
-    { key: "incoming",      label: "Incoming Conversations", icon: "📥", cssClass: "incoming", row: 1 },
-    { key: "outgoing",      label: "Outgoing Conversations", icon: "📤", cssClass: "outgoing", row: 1 },
+    { key: "incoming",      label: "Incoming", icon: "📥", cssClass: "incoming", row: 1 },
+    { key: "outgoing",      label: "Outgoing", icon: "📤", cssClass: "outgoing", row: 1 },
     { key: "engaged",       label: "Engaged",                icon: "🤝", cssClass: "engaged",  row: 1 },
     { key: "queue",         label: "In Queue",               icon: "⏳", cssClass: "queue",    row: 1 },
     { key: "abandoned",     label: "Abandoned Rate",         icon: "⚠️", cssClass: "abandoned", row: 1 },
