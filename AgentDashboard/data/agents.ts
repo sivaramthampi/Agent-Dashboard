@@ -3,6 +3,7 @@ import { formatElapsedSince, formattedValue } from "./dataverseUtils";
 
 export interface AgentSnapshotEntry {
     agentId: string;
+    agentStatusId: string | undefined;
     name: string;
     presence: string;
     presenceId: string | undefined;
@@ -12,6 +13,22 @@ export interface AgentSnapshotEntry {
 
 const OFFLINE_LABELS = new Set(["offline","Offline","signed out","Signed out","not available","Not available",""]);
 const isLoggedIn = (p: string) => !OFFLINE_LABELS.has(p.trim());
+
+// Specific msdyn_agentstatus record GUIDs (msdyn_agentstatusid — the status
+// record's own primary key, NOT the agent/systemuser ID) to exclude from the
+// Agent List entirely, regardless of presence/status. Compared case-insensitively.
+const EXCLUDED_AGENT_STATUS_IDS = new Set([
+    "44b5aada-f6a0-ef11-8a6a-000d3a370ec3",
+    "5232ce36-2fd5-ef11-8eea-00224806ccec",
+    "c0428915-f7a0-ef11-8a6a-00224806fb06",
+    "aef48527-01a1-ef11-8a6a-6045bd049ba5",
+    "77e7e1c6-b2df-4859-bc4b-732d4ede5309",
+    "daf5270e-f72c-46c7-b663-dfc13def019c",
+    "dd043dff-f307-4c68-b885-f6edc5525bab",
+    "f2a0fc91-bce0-4fb1-af6f-fe58b9e962b9",
+]);
+const isExcludedAgentStatus = (agentStatusId: string | undefined) =>
+    !!agentStatusId && EXCLUDED_AGENT_STATUS_IDS.has(agentStatusId.toLowerCase());
 
 // The msdyn_presence table has 20+ records (break, lunch, meeting, coaching,
 // training, various DND sub-states, etc.) — most of which roll up to a
@@ -45,6 +62,7 @@ export async function fetchAgentSnapshot(webAPI: ComponentFramework.WebApi): Pro
         const presenceId = (e["_msdyn_currentpresenceid_value"] as string | undefined)?.toLowerCase();
         snapshot.push({
             agentId: id,
+            agentStatusId: e["msdyn_agentstatusid"] as string | undefined,
             name: formattedValue(e, "_msdyn_agentid_value") ?? "Unknown agent",
             presence,
             presenceId,
@@ -82,24 +100,26 @@ export async function fetchAgentOptions(webAPI: ComponentFramework.WebApi): Prom
 }
 
 
-// Fetch the set of real human agent IDs (accessmode = 0, Read-Write).
-// Bot/Copilot/Virtual Agent accounts all have accessmode = 4 (Non-interactive)
-// confirmed via console: every bot account in this org has accessmode=4,
-// islicensed=false, and a populated applicationid — vs accessmode=0 for humans.
-// This is a reliable field-based check, not name-pattern matching.
+// Fetch the set of agent IDs to include (accessmode != 4, Non-interactive).
+// Bot/Copilot/Virtual Agent accounts are accessmode 4 (Non-interactive) —
+// this excludes only those, and now includes Read-Write(0), Administrative(1),
+// Read(2), Support User(3), and Delegated Admin(5).
 export async function fetchRealAgentIds(webAPI: ComponentFramework.WebApi): Promise<Set<string>> {
     const query =
         "?$select=systemuserid" +
-        "&$filter=accessmode eq 0" +
+        "&$filter=accessmode ne 4" +
         "&$top=1000";
     const result = await webAPI.retrieveMultipleRecords("systemuser", query);
     return new Set(result.entities.map(e => e["systemuserid"] as string));
 }
 
+// Filters: isLoggedIn (presence text not in {offline, signed out, not
+// available, ""}) and not one of the explicitly excluded agent GUIDs.
+// realAgentIds param kept for call-site compatibility but not applied.
 export function deriveAgentRows(snapshot: AgentSnapshotEntry[], realAgentIds: Set<string>): AgentRow[] {
     return snapshot
         .filter(a => a.isLoggedIn)
-        .filter(a => realAgentIds.has(a.agentId)) // field-based: only accessmode=0 humans
+        .filter(a => !isExcludedAgentStatus(a.agentStatusId))
         .map(a => ({
             id: a.agentId,
             name: a.name,
@@ -112,14 +132,14 @@ export function deriveAgentRows(snapshot: AgentSnapshotEntry[], realAgentIds: Se
 }
 
 export function deriveAgentsLoggedInCount(snapshot: AgentSnapshotEntry[], realAgentIds: Set<string>): number {
-    return snapshot.filter(a => a.isLoggedIn && realAgentIds.has(a.agentId)).length;
+    return snapshot.filter(a => a.isLoggedIn && !isExcludedAgentStatus(a.agentStatusId)).length;
 }
 
 export interface PresenceBreakdownItem { presence: string; count: number; }
 
 export function derivePresenceBreakdown(snapshot: AgentSnapshotEntry[], realAgentIds: Set<string>): PresenceBreakdownItem[] {
     const counts = new Map<string, number>();
-    for (const a of snapshot.filter(x => x.isLoggedIn && realAgentIds.has(x.agentId))) {
+    for (const a of snapshot.filter(x => x.isLoggedIn && !isExcludedAgentStatus(x.agentStatusId))) {
         const label = (a.presenceId && CANONICAL_PRESENCE_BY_ID[a.presenceId]) ?? a.presence;
         counts.set(label, (counts.get(label) ?? 0) + 1);
     }
