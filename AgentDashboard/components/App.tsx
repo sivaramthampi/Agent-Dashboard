@@ -134,6 +134,15 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
     const filtersRef = useRef(filters);
     filtersRef.current = filters;
 
+    // PCF's updateView() can hand us a new `context.webAPI` object reference
+    // on scroll/resize (the platform re-measures the container) even though
+    // it's functionally the same API. Reading it via a ref — instead of
+    // depending on it directly — stops that reference churn from retriggering
+    // `refresh` and, downstream, the filter-change effect (which was causing
+    // the loader to flash on scroll).
+    const webAPIRef = useRef(webAPI);
+    webAPIRef.current = webAPI;
+
     // ── Load queue + agent options once on mount ──────────────────────────────
     // Uses a ref guard so it never runs twice even in StrictMode
     const optionsLoaded = useRef(false);
@@ -237,14 +246,14 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
         );
 
         const [kpiR, convR, snapR, waitR, statusR, trendR, sentimentR, wrapupR] = await Promise.allSettled([
-            fetchKpis(webAPI, activeFilters),
-            fetchOngoingConversations(webAPI, activeFilters),
-            fetchAgentSnapshot(webAPI),
-            fetchAvgWaitByQueue(webAPI, activeFilters),
-            fetchStatusBreakdown(webAPI, activeFilters),
-            fetchTrend(webAPI, activeFilters, "hour"),
-            fetchSentimentBreakdown(webAPI, dateFilter),
-            fetchAgentWrapupMetrics(webAPI, activeFilters, realAgentIds),
+            fetchKpis(webAPIRef.current, activeFilters),
+            fetchOngoingConversations(webAPIRef.current, activeFilters),
+            fetchAgentSnapshot(webAPIRef.current),
+            fetchAvgWaitByQueue(webAPIRef.current, activeFilters),
+            fetchStatusBreakdown(webAPIRef.current, activeFilters),
+            fetchTrend(webAPIRef.current, activeFilters, "hour"),
+            fetchSentimentBreakdown(webAPIRef.current, dateFilter),
+            fetchAgentWrapupMetrics(webAPIRef.current, activeFilters, realAgentIds),
         ]);
 
         setKpiRefreshing(false);
@@ -312,7 +321,7 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
         setWrapupLoading(false);
 
         setLastUpdated(new Date().toLocaleTimeString());
-    }, [webAPI, realAgentIds]);
+    }, [realAgentIds]);
 
     // ── Run refresh on mount + on filter changes + on interval ───────────────
     // Separate effect that re-runs when filters change so a manual filter change
