@@ -10,22 +10,24 @@ export interface AgentListTableProps {
     presenceBreakdown: PresenceBreakdownItem[];
 }
 
+// Agent rows are filtered upstream (data/agents.ts) so status is either one
+// of these 5 canonical labels, or — for any other presence an agent might be
+// in (break, lunch, meeting, etc.) — the raw presence display text. Those
+// "other" statuses get a dynamic tile generated below rather than a fixed
+// class here; they render with the "default" badge style as a fallback.
 const STATUS_CLASS: Record<string, string> = {
-    "Available":  "available",
-    "Busy":       "busy",
-    "Busy - DND": "busy",
-    "Away":       "away",
-    "Wrap-up":    "wrapup",
+    "Available": "available",
+    "Busy":      "busy",
+    "BusyDND":   "busy",
+    "Away":      "away",
+    "Project":   "project",
 };
 
 const PRESENCE_COLOR: Record<string, string> = {
     "available":    "#22C55E",
-    "busy - dnd":   "#EF4444",
     "busydnd":       "#EF4444",
     "busy":         "#EF4444",
     "away":         "#F59E0B",
-    "be right back":"#F59E0B",
-    "offline":      "#94A3B8",
     "project":      "#818CF8",
 };
 
@@ -43,13 +45,15 @@ function rowAlertClass(durationStr: string): string {
     return "";
 }
 
-const STRIP_STATES = [
+// These 5 are static — always shown, even with a count of 0.
+const STATIC_STATES = [
     { key: "available", label: "Available", color: "#22C55E", matches: ["available"] },
-    { key: "busy",      label: "Busy",      color: "#EF4444", matches: ["busy", "busy - dnd", "busydnd"] },
+    { key: "busy",      label: "Busy",      color: "#EF4444", matches: ["busy"] },
     { key: "busydnd",   label: "BusyDND",   color: "#EF4444", matches: ["busydnd"] },
     { key: "away",      label: "Away",      color: "#F59E0B", matches: ["away"] },
     { key: "project",   label: "Project",   color: "#818CF8", matches: ["project"] },
 ];
+const STATIC_KEYS = new Set(STATIC_STATES.map(s => s.key));
 
 const COMPARATORS = {
     name:     stringComparator<AgentRow>(r => r.name ?? r.id),
@@ -62,19 +66,30 @@ export const AgentListTable: React.FC<AgentListTableProps> = ({ rows, isLoading,
     // clicking the active card again clears it (toggle off).
     const [activeKey, setActiveKey] = React.useState<string | null>(null);
 
-    // Merge busy + busy-dnd for the strip
     // Build count map from presenceBreakdown
     const countMap = new Map<string, number>();
     presenceBreakdown.forEach(p => countMap.set(p.presence.toLowerCase(), p.count));
-    // Always show all 5 states in fixed order, count defaults to 0
-    const stripItems = STRIP_STATES.map(s => ({
+
+    // Any presence showing up that isn't one of the 5 static ones gets its
+    // own dynamic tile — only added when at least one agent is actually in
+    // that status, using its raw display text as both label and match key.
+    const dynamicStates = presenceBreakdown
+        .filter(p => !STATIC_KEYS.has(p.presence.toLowerCase()))
+        .map(p => ({
+            key: p.presence.toLowerCase(),
+            label: p.presence,
+            color: "#94A3B8", // neutral slate — these aren't primary tracked states
+            matches: [p.presence.toLowerCase()],
+        }));
+
+    // Always show all 5 static states in fixed order (count defaults to 0),
+    // followed by any dynamic "other" tiles currently in use.
+    const stripItems = [...STATIC_STATES, ...dynamicStates].map(s => ({
         key: s.key,
         label: s.label,
         color: s.color,
         matches: s.matches,
-        // merge busy-dnd into busy count
-        count: (countMap.get(s.key) ?? 0) +
-               (s.key === "busy" ? (countMap.get("busy - dnd") ?? 0) + (countMap.get("busydnd") ?? 0) : 0),
+        count: countMap.get(s.key) ?? 0,
     }));
 
     const activeState = stripItems.find(s => s.key === activeKey) ?? null;

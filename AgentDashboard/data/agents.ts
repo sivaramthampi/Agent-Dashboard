@@ -5,12 +5,29 @@ export interface AgentSnapshotEntry {
     agentId: string;
     name: string;
     presence: string;
+    presenceId: string | undefined;
     presenceSince: string | undefined;
     isLoggedIn: boolean;
 }
 
 const OFFLINE_LABELS = new Set(["offline","Offline","signed out","Signed out","not available","Not available",""]);
 const isLoggedIn = (p: string) => !OFFLINE_LABELS.has(p.trim());
+
+// The msdyn_presence table has 20+ records (break, lunch, meeting, coaching,
+// training, various DND sub-states, etc.) — most of which roll up to a
+// "Busy" or "Busy - DND" base status but aren't the primary states we track.
+// These 5 are the static/always-shown tiles, keyed by msdyn_presence GUID
+// (not display text) since several presence records share the same or very
+// similar display names. Any other presence an agent is actually in still
+// shows up — just as a dynamic tile using its own raw display text, added
+// only when at least one agent is currently in that status.
+export const CANONICAL_PRESENCE_BY_ID: Record<string, string> = {
+    "f523f628-c07a-e811-8162-000d3aa11f50": "Available",
+    "efdeb843-c07a-e811-8162-000d3aa11f50": "Busy",
+    "08971864-c07a-e811-8162-000d3aa11f50": "BusyDND",
+    "57900534-228c-ed11-81ac-6045bd019179": "Project",
+    "3dacae76-c07a-e811-8162-000d3aa11f50": "Away",
+};
 
 export async function fetchAgentSnapshot(webAPI: ComponentFramework.WebApi): Promise<AgentSnapshotEntry[]> {
     const query =
@@ -25,10 +42,12 @@ export async function fetchAgentSnapshot(webAPI: ComponentFramework.WebApi): Pro
         if (!id || seen.has(id)) continue;
         seen.add(id);
         const presence = formattedValue(e, "_msdyn_currentpresenceid_value") ?? "";
+        const presenceId = (e["_msdyn_currentpresenceid_value"] as string | undefined)?.toLowerCase();
         snapshot.push({
             agentId: id,
             name: formattedValue(e, "_msdyn_agentid_value") ?? "Unknown agent",
             presence,
+            presenceId,
             presenceSince: e["msdyn_presencemodifiedon"] as string | undefined,
             isLoggedIn: isLoggedIn(presence),
         });
@@ -84,7 +103,10 @@ export function deriveAgentRows(snapshot: AgentSnapshotEntry[], realAgentIds: Se
         .map(a => ({
             id: a.agentId,
             name: a.name,
-            status: a.presence,
+            // Canonical label if this GUID is one of the 5 tracked statuses,
+            // otherwise fall back to the raw presence text so "other" statuses
+            // still show up (as their own dynamic tile in the UI).
+            status: (a.presenceId && CANONICAL_PRESENCE_BY_ID[a.presenceId]) ?? a.presence,
             duration: formatElapsedSince(a.presenceSince),
         }));
 }
@@ -98,7 +120,8 @@ export interface PresenceBreakdownItem { presence: string; count: number; }
 export function derivePresenceBreakdown(snapshot: AgentSnapshotEntry[], realAgentIds: Set<string>): PresenceBreakdownItem[] {
     const counts = new Map<string, number>();
     for (const a of snapshot.filter(x => x.isLoggedIn && realAgentIds.has(x.agentId))) {
-        counts.set(a.presence, (counts.get(a.presence) ?? 0) + 1);
+        const label = (a.presenceId && CANONICAL_PRESENCE_BY_ID[a.presenceId]) ?? a.presence;
+        counts.set(label, (counts.get(label) ?? 0) + 1);
     }
     return Array.from(counts.entries()).map(([presence, count]) => ({ presence, count }));
 }
