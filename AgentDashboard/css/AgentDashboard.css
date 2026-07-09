@@ -640,15 +640,19 @@
 .ad-two-col-panels > .ad-panel {
     display: flex;
     flex-direction: column;
+    height: 320px; /* static height — do not let flex-stretch or content override this */
 }
 .ad-two-col-panels .ad-table-scroll {
     flex: 1;
+    min-height: 0; /* required so flex:1 can shrink inside the fixed-height parent instead of overflowing */
 }
 .ad-two-col-panels .ad-panel-body {
     flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     justify-content: center;
+    overflow: hidden;
 }
 
 /* ── Agent list row alert (duration in status) ── */
