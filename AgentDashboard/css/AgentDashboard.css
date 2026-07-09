@@ -754,16 +754,6 @@
 }
 .ad-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
-/* ── Performance score badge ── */
-.ad-score {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 34px; height: 20px; border-radius: 6px;
-    font-size: 11px; font-weight: 500;
-}
-.ad-score-green { background: rgba(220,252,231,.8); color: #065F46; }
-.ad-score-amber { background: rgba(254,243,199,.8); color: #92400E; }
-.ad-score-red   { background: rgba(255,228,230,.8); color: #9F1239; }
-
 /* ── Open conversation button ── */
 .ad-open-btn {
     background: transparent;
@@ -797,40 +787,6 @@
     80%  { width: 100%; opacity: 1; }
     100% { width: 100%; opacity: 0; }
 }
-
-/* ── Top performer highlights ── */
-@keyframes ad-glow-1 {
-    0%  { box-shadow: 0 0 0 2px rgba(245,158,11,.4), 0 0 6px 2px rgba(245,158,11,.2); }
-    50% { box-shadow: 0 0 0 3px rgba(245,158,11,.9), 0 0 12px 4px rgba(245,158,11,.45); }
-    100%{ box-shadow: 0 0 0 2px rgba(245,158,11,.4), 0 0 6px 2px rgba(245,158,11,.2); }
-}
-@keyframes ad-glow-2 {
-    0%  { box-shadow: 0 0 0 2px rgba(148,163,184,.45), 0 0 5px 2px rgba(148,163,184,.2); }
-    50% { box-shadow: 0 0 0 3px rgba(203,213,225,.95), 0 0 10px 3px rgba(148,163,184,.4); }
-    100%{ box-shadow: 0 0 0 2px rgba(148,163,184,.45), 0 0 5px 2px rgba(148,163,184,.2); }
-}
-@keyframes ad-glow-3 {
-    0%  { box-shadow: 0 0 0 2px rgba(194,128,90,.4), 0 0 5px 2px rgba(194,128,90,.2); }
-    50% { box-shadow: 0 0 0 3px rgba(214,148,110,.9), 0 0 10px 3px rgba(194,128,90,.4); }
-    100%{ box-shadow: 0 0 0 2px rgba(194,128,90,.4), 0 0 5px 2px rgba(194,128,90,.2); }
-}
-.ad-avatar-glow-1 { animation: ad-glow-1 1.8s ease-in-out infinite; }
-.ad-avatar-glow-2 { animation: ad-glow-2 2s ease-in-out infinite; }
-.ad-avatar-glow-3 { animation: ad-glow-3 2.2s ease-in-out infinite; }
-
-.ad-rank-watermark {
-    font-size: 38px;
-    font-weight: 700;
-    opacity: .06;
-    line-height: 1;
-    pointer-events: none;
-    user-select: none;
-    margin-left: auto;
-    flex-shrink: 0;
-}
-.ad-rank-1 .ad-rank-watermark { color: #D97706; }
-.ad-rank-2 .ad-rank-watermark { color: #64748B; }
-.ad-rank-3 .ad-rank-watermark { color: #C2805A; }
 
 /* ── Sentiment KPI tile ── */
 .ad-card.sentiment { background: linear-gradient(135deg,rgba(220,252,231,.55),rgba(240,253,244,.48)) !important; }

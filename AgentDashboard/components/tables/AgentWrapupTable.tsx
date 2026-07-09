@@ -17,12 +17,6 @@ function rowAlertClass(avgWrapup: number): string {
     return "";
 }
 
-function scoreClass(score: number): string {
-    if (score >= 75) return "ad-score-green";
-    if (score >= 50) return "ad-score-amber";
-    return "ad-score-red";
-}
-
 function Initials({ name }: { name: string }) {
     const parts = name.trim().split(" ");
     const ini = parts.length >= 2
@@ -47,56 +41,30 @@ function avatarColor(name: string) {
     return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-function AgentAvatar({ name, rank }: { name: string; rank: string }) {
+function AgentAvatar({ name }: { name: string }) {
     const col = avatarColor(name);
     return (
-        <div className={`ad-avatar ${rank ? `ad-avatar-glow-${rank}` : ""}`}
-             style={{ background: col.bg, color: col.color }}>
+        <div className="ad-avatar" style={{ background: col.bg, color: col.color }}>
             <Initials name={name} />
         </div>
     );
 }
 
-
-function rankClass(idx: number): string {
-    if (idx === 0) return "ad-rank-1";
-    if (idx === 1) return "ad-rank-2";
-    if (idx === 2) return "ad-rank-3";
-    return "";
-}
-
-function rankWatermark(idx: number): string {
-    if (idx === 0) return "1";
-    if (idx === 1) return "2";
-    if (idx === 2) return "3";
-    return "";
-}
-
 interface Props { rows: AgentWrapupRow[]; isLoading: boolean; }
 
-// Rows arrive pre-sorted by performanceScore (desc) from the data layer — that
-// order is what drives the gold/silver/bronze medal styling. We freeze that as
-// `_rank` before the user applies any column sort, so the medals always refer
-// to the actual leaderboard position regardless of how the table is displayed.
-type RankedRow = AgentWrapupRow & { _rank: number };
-
 const COMPARATORS = {
-    agent:   stringComparator<RankedRow>(r => r.agentName),
-    convs:   numberComparator<RankedRow>(r => r.conversations),
-    avgHandle:   numberComparator<RankedRow>(r => r.avgHandleSec),
-    totalHandle: numberComparator<RankedRow>(r => r.totalHandleSec),
-    avgWrapup:   numberComparator<RankedRow>(r => r.avgWrapupSec),
-    totalWrapup: numberComparator<RankedRow>(r => r.totalWrapupSec),
-    sentiment:   numberComparator<RankedRow>(r => r.avgSentiment ?? -Infinity),
-    score:       numberComparator<RankedRow>(r => r.performanceScore),
+    agent:   stringComparator<AgentWrapupRow>(r => r.agentName),
+    convs:   numberComparator<AgentWrapupRow>(r => r.conversations),
+    avgHandle:   numberComparator<AgentWrapupRow>(r => r.avgHandleSec),
+    totalHandle: numberComparator<AgentWrapupRow>(r => r.totalHandleSec),
+    avgWrapup:   numberComparator<AgentWrapupRow>(r => r.avgWrapupSec),
+    totalWrapup: numberComparator<AgentWrapupRow>(r => r.totalWrapupSec),
+    sentiment:   numberComparator<AgentWrapupRow>(r => r.avgSentiment ?? -Infinity),
 };
 
 export const AgentWrapupTable: React.FC<Props> = ({ rows, isLoading }) => {
-    const rankedRows: RankedRow[] = React.useMemo(
-        () => rows.map((r, idx) => ({ ...r, _rank: idx })),
-        [rows]
-    );
-    const { sortedRows, sortKey, direction, onSort } = useSortableRows(rankedRows, COMPARATORS);
+    // Default sort: avg wrap-up time, ascending (lowest first)
+    const { sortedRows, sortKey, direction, onSort } = useSortableRows(rows, COMPARATORS, "avgWrapup", "asc");
 
     return (
     <div className="ad-panel">
@@ -107,14 +75,13 @@ export const AgentWrapupTable: React.FC<Props> = ({ rows, isLoading }) => {
         <div className="ad-table-scroll ad-table-scroll-lg">
             <table className="ad-table ad-stats-table" style={{ tableLayout: "fixed" }}>
                 <colgroup>
-                    <col style={{ width: "20%" }} />
-                    <col style={{ width: "6%" }} />
-                    <col style={{ width: "10%" }} />
-                    <col style={{ width: "10%" }} />
-                    <col style={{ width: "10%" }} />
-                    <col style={{ width: "10%" }} />
-                    <col style={{ width: "8%" }} />
-                    <col style={{ width: "8%" }} />
+                    <col style={{ width: "22%" }} />
+                    <col style={{ width: "7%" }} />
+                    <col style={{ width: "11%" }} />
+                    <col style={{ width: "11%" }} />
+                    <col style={{ width: "11%" }} />
+                    <col style={{ width: "11%" }} />
+                    <col style={{ width: "9%" }} />
                 </colgroup>
                 <thead>
                     <tr>
@@ -125,25 +92,21 @@ export const AgentWrapupTable: React.FC<Props> = ({ rows, isLoading }) => {
                         <SortableHeader label="Avg Wrap-up" sortKey="avgWrapup" activeKey={sortKey} direction={direction} onSort={onSort} align="right" />
                         <SortableHeader label="Total Wrap-up" sortKey="totalWrapup" activeKey={sortKey} direction={direction} onSort={onSort} align="right" />
                         <SortableHeader label="Sentiment" sortKey="sentiment" activeKey={sortKey} direction={direction} onSort={onSort} align="right" />
-                        <SortableHeader label="Score" sortKey="score" activeKey={sortKey} direction={direction} onSort={onSort} align="right" />
                     </tr>
                 </thead>
                 <tbody>
-                    {isLoading && <tr><td colSpan={8} className="ad-table-empty">Loading…</td></tr>}
+                    {isLoading && <tr><td colSpan={7} className="ad-table-empty">Loading…</td></tr>}
                     {!isLoading && sortedRows.length === 0 && (
-                        <tr><td colSpan={8} className="ad-table-empty">No data for this period</td></tr>
+                        <tr><td colSpan={7} className="ad-table-empty">No data for this period</td></tr>
                     )}
                     {!isLoading && sortedRows.map((row) => (
-                        <tr key={row.agentId} className={[rowAlertClass(row.avgWrapupSec), rankClass(row._rank)].filter(Boolean).join(" ")}>
+                        <tr key={row.agentId} className={rowAlertClass(row.avgWrapupSec)}>
                             <td>
                                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                                    <AgentAvatar name={row.agentName} rank={rankClass(row._rank).replace("ad-rank-","")} />
+                                    <AgentAvatar name={row.agentName} />
                                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                         {row.agentName}
                                     </span>
-                                    {rankWatermark(row._rank) && (
-                                        <span className="ad-rank-watermark">{rankWatermark(row._rank)}</span>
-                                    )}
                                 </div>
                             </td>
                             <td>{row.conversations}</td>
@@ -160,11 +123,6 @@ export const AgentWrapupTable: React.FC<Props> = ({ rows, isLoading }) => {
                             }}>
                                 {row.avgSentiment === null ? "—"
                                     : `${row.avgSentiment >= 0 ? "+" : ""}${row.avgSentiment.toFixed(1)}`}
-                            </td>
-                            <td>
-                                <span className={`ad-score ${scoreClass(row.performanceScore)}`}>
-                                    {row.performanceScore}
-                                </span>
                             </td>
                         </tr>
                     ))}

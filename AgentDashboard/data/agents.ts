@@ -155,7 +155,6 @@ export interface AgentWrapupRow {
     avgWrapupSec: number;
     totalWrapupSec: number;
     avgSentiment: number | null; // weighted avg -3 to +3, null if no sentiment data
-    performanceScore: number;    // 0-100 weighted score
 }
 
 export async function fetchAgentWrapupMetrics(
@@ -186,11 +185,8 @@ export async function fetchAgentWrapupMetrics(
         }
     }
 
-    // Calculate team averages for scoring
     const allRows = Array.from(map.entries())
         .filter(([id]) => realAgentIds.has(id));
-    const teamAvgConvs = allRows.length > 0
-        ? allRows.reduce((s, [,d]) => s + d.handles.length, 0) / allRows.length : 1;
 
     return allRows
         .map(([id, d]) => {
@@ -201,16 +197,6 @@ export async function fetchAgentWrapupMetrics(
             const avgSentiment = d.sentiments.length > 0
                 ? d.sentiments.reduce((a,b)=>a+b,0)/d.sentiments.length : null;
 
-            // Scoring: weighted 0-100
-            // 15% conversations, 20% handle time, 30% wrapup, 35% sentiment
-            const convScore    = Math.min((d.handles.length / teamAvgConvs) * 100, 100);
-            const handleScore  = Math.max(100 - Math.min(Math.abs(avgHandle - 600) / 600 * 100, 100), 0);
-            const wrapupScore  = Math.max(100 - (avgWrapup / 600) * 100, 0);
-            const sentScore    = avgSentiment !== null ? ((avgSentiment + 3) / 6) * 100 : 50;
-            const performanceScore = Math.round(
-                convScore * 0.15 + handleScore * 0.20 + wrapupScore * 0.30 + sentScore * 0.35
-            );
-
             return {
                 agentId: id,
                 agentName: d.name,
@@ -220,8 +206,7 @@ export async function fetchAgentWrapupMetrics(
                 avgWrapupSec: avgWrapup,
                 totalWrapupSec: totalWrapup,
                 avgSentiment,
-                performanceScore: Math.min(Math.max(performanceScore, 0), 100),
             };
         })
-        .sort((a, b) => b.performanceScore - a.performanceScore);
+        .sort((a, b) => a.avgWrapupSec - b.avgWrapupSec);
 }
