@@ -430,7 +430,7 @@
 .ad-tables-side { display: flex; flex-direction: column; gap: 10px; }
 .ad-tables > .ad-panel { display: flex; flex-direction: column; }
 .ad-tables-side > .ad-panel { flex: 1; display: flex; flex-direction: column; }
-.ad-tables .ad-panel-body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.ad-tables .ad-panel-body { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; }
 
 /* fixed-height scrollable table body — stays constant regardless of row count */
 .ad-table-scroll { height: 220px; overflow-y: auto; }
