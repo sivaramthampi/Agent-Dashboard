@@ -113,6 +113,13 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
     const [optionsReady, setOptionsReady] = useState(false);
     const [realAgentIds, setRealAgentIds] = useState<Set<string>>(new Set());
 
+    // ── Full-screen loader shown only while a FILTER CHANGE is refreshing ────
+    // (not on initial mount, and not on the silent interval refresh)
+    const [filterRefreshing, setFilterRefreshing] = useState(false);
+    const isFirstFilterRun = useRef(true);
+    const overlayShownAtRef = useRef(0);
+    const MIN_OVERLAY_MS = 300; // avoids a single-frame flash on fast responses
+
     // ── Stable filter value refs — avoids Set object identity churn ──────────
     const getFilter = (key: string) => filters.find(f => f.key === key);
 
@@ -240,7 +247,6 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
             fetchAgentWrapupMetrics(webAPI, activeFilters, realAgentIds),
         ]);
 
-
         setKpiRefreshing(false);
         if (kpiR.status === "fulfilled") {
             setKpi(kpiR.value);
@@ -313,7 +319,23 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
     // triggers an immediate refresh, while the interval stays stable.
     useEffect(() => {
         if (!optionsReady) return; // wait for queue/agent options before first refresh
-        void refresh();
+
+        if (isFirstFilterRun.current) {
+            // Initial load after options resolve — not a user filter change, no overlay.
+            isFirstFilterRun.current = false;
+            void refresh();
+            return;
+        }
+
+        setFilterRefreshing(true);
+        overlayShownAtRef.current = Date.now();
+        void refresh().finally(() => {
+            // Hold the overlay for a minimum duration so fast responses
+            // don't just blink on/off within a single frame.
+            const elapsed = Date.now() - overlayShownAtRef.current;
+            const remaining = Math.max(0, MIN_OVERLAY_MS - elapsed);
+            window.setTimeout(() => setFilterRefreshing(false), remaining);
+        });
     // These serialised strings are stable primitives — safe as deps.
     }, [refresh, queueSelKeys, queueAllKeys, channelSelKeys, agentSelKeys, orgTimezoneBias, optionsReady]);
 
@@ -373,6 +395,10 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
 
     return (
         <div className="ad-dashboard">
+            <div className={`ad-loader-overlay${filterRefreshing ? " is-visible" : ""}`} role="status" aria-live="polite">
+                <div className="ad-loader-spinner" />
+                <div className="ad-loader-text">Updating dashboard…</div>
+            </div>
             <div className="ad-header">
                 <div className="ad-title"><span className="ad-live-dot" />Agent Dashboard</div>
                 <div className="ad-last-updated">Last updated: {lastUpdated}</div>

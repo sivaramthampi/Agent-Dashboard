@@ -33,12 +33,12 @@
 /* ── Page ── */
 .ad-dashboard {
     isolation: isolate;
+    position: relative;
     font-family: "Segoe UI", "Segoe UI Web (West European)", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
     background: linear-gradient(145deg, #ffffff 0%, #f3f7fd 40%, #fbf7ff 70%, #f9fbff 100%);
     min-height: 100%;
     padding: 18px 20px 40px;
     box-sizing: border-box;
-    position: relative;
 }
 
 /* ambient blobs */
@@ -58,6 +58,48 @@
 }
 .ad-dashboard > * { position: relative; z-index: 1; }
 .ad-dashboard * { box-sizing: border-box; }
+
+/* ── Full-screen loader overlay (shown while a filter change is refreshing) ──
+   position: fixed — locks to the viewport so the spinner stays dead-center
+   of the visible screen regardless of scroll position or page height. */
+.ad-loader-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 180ms ease;
+}
+.ad-loader-overlay.is-visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: all;
+}
+.ad-loader-spinner {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 3px solid rgba(99, 102, 241, 0.18);
+    border-top-color: #6366F1;
+    animation: ad-spin 0.8s linear infinite;
+}
+.ad-loader-text {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-dim, #4B5563);
+}
+@keyframes ad-spin {
+    to { transform: rotate(360deg); }
+}
 
 /* ── Glass mixin helpers ── */
 .ad-glass {
