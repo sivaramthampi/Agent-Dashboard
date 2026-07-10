@@ -38,7 +38,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({ points, isLoading }) => 
     const [hover, setHover] = useState<{ index: number; x: number; y: number } | null>(null);
     const svgRef = useRef<SVGSVGElement>(null);
 
-    const max = Math.max(1, ...points.map(p => Math.max(p.incoming, p.engaged)));
+    const max = Math.max(1, ...points.map(p => Math.max(p.incoming, p.engaged, p.abandoned)));
     const labelStep = Math.max(1, Math.ceil(points.length / 6));
 
     const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
@@ -67,6 +67,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({ points, isLoading }) => 
 
     const incomingPath = buildLinePath(points.map(p => p.incoming), max);
     const engagedPath = buildLinePath(points.map(p => p.engaged), max);
+    const abandonedPath = buildLinePath(points.map(p => p.abandoned), max);
     const incomingArea = buildAreaPath(points.map(p => p.incoming), max);
 
     const hoveredPoint = hover !== null ? points[hover.index] : null;
@@ -108,6 +109,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({ points, isLoading }) => 
                 {/* Lines */}
                 <path d={incomingPath} fill="none" stroke="#6366F1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
                 <path d={engagedPath} fill="none" stroke="#2DD4BF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d={abandonedPath} fill="none" stroke="#F87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 2" />
 
                 {/* Hover crosshair */}
                 {hover && (
@@ -125,22 +127,25 @@ export const TrendChart: React.FC<TrendChartProps> = ({ points, isLoading }) => 
                         <g key={i}>
                             <circle cx={toSvgX(i, points.length)} cy={toSvgY(p.incoming, max)} r="4.5" fill="#fff" stroke="#6366F1" strokeWidth="2" />
                             <circle cx={toSvgX(i, points.length)} cy={toSvgY(p.engaged, max)} r="4.5" fill="#fff" stroke="#2DD4BF" strokeWidth="2" />
+                            <circle cx={toSvgX(i, points.length)} cy={toSvgY(p.abandoned, max)} r="4.5" fill="#fff" stroke="#F87171" strokeWidth="2" />
                         </g>
                     );
                 })}
 
                 {/* Hover tooltip rendered inside SVG as foreignObject for rich layout */}
                 {hover && hoveredPoint && (() => {
-                    const tx = Math.min(hover.x + 10, WIDTH - 130);
-                    const ty = Math.max(PAD_Y, hover.y - 50);
+                    const tx = Math.min(hover.x + 10, WIDTH - 150);
+                    const ty = Math.max(PAD_Y, hover.y - 64);
                     return (
                         <g>
-                            <rect x={tx} y={ty} width="120" height="44" rx="6" fill="#111827" opacity="0.92" />
+                            <rect x={tx} y={ty} width="140" height="58" rx="6" fill="#111827" opacity="0.92" />
                             <text x={tx + 10} y={ty + 16} fontSize="11" fontWeight="500" fill="#fff">{hoveredPoint.label}</text>
                             <circle cx={tx + 10} cy={ty + 28} r="3" fill="#6366F1" />
                             <text x={tx + 17} y={ty + 32} fontSize="10" fill="#D1D5DB">In: {hoveredPoint.incoming}</text>
                             <circle cx={tx + 65} cy={ty + 28} r="3" fill="#2DD4BF" />
                             <text x={tx + 72} y={ty + 32} fontSize="10" fill="#D1D5DB">Eng: {hoveredPoint.engaged}</text>
+                            <circle cx={tx + 10} cy={ty + 44} r="3" fill="#F87171" />
+                            <text x={tx + 17} y={ty + 48} fontSize="10" fill="#D1D5DB">Aband: {hoveredPoint.abandoned}</text>
                         </g>
                     );
                 })()}
@@ -161,6 +166,9 @@ export const TrendChart: React.FC<TrendChartProps> = ({ points, isLoading }) => 
                 </div>
                 <div className="ad-legend-item">
                     <span className="ad-legend-sw" style={{ background: "#2DD4BF" }} />Engaged
+                </div>
+                <div className="ad-legend-item">
+                    <span className="ad-legend-sw" style={{ background: "#F87171" }} />Abandoned
                 </div>
             </div>
         </div>
