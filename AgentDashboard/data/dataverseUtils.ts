@@ -232,3 +232,35 @@ export async function runAggregate(
     const value = row?.["result"];
     return typeof value === "number" ? value : 0;
 }
+
+// Run several named aggregates in ONE Dataverse round-trip instead of one call per field.
+// e.g. runMultiAggregate(webAPI, E, filter, [
+//        { field: "msdyn_conversationtalktimeinseconds", op: "average", alias: "avgTalk" },
+//        { field: "msdyn_conversationactivewrapuptimeinseconds", op: "average", alias: "avgWrap" },
+//        { field: "msdyn_conversationholdtimeinseconds", op: "average", alias: "avgHold" },
+//      ])
+// NOTE: each named average is computed independently over non-null values for THAT field
+// (standard OData aggregate behaviour). If talk/wrap/hold are populated inconsistently across
+// records (e.g. hold time null on some sessions but talk time present), the three averages are
+// each over a slightly different denominator, so summing them is an approximation of the true
+// per-session average — not mathematically identical to averaging (talk+wrap+hold) per record.
+// Acceptable for a supervisor dashboard; flag if exact per-record precision is required.
+export async function runMultiAggregate(
+    webAPI: ComponentFramework.WebApi,
+    entityLogicalName: string,
+    filter: string | undefined,
+    aggregates: { field: string; op: Exclude<AggregateOp, "count">; alias: string }[]
+): Promise<Record<string, number>> {
+    const aggExpr = `aggregate(${aggregates.map(a => `${a.field} with ${a.op} as ${a.alias}`).join(",")})`;
+    const qs = filter ? `?$filter=${filter}&$apply=${aggExpr}` : `?$apply=${aggExpr}`;
+
+    const result = await webAPI.retrieveMultipleRecords(entityLogicalName, qs);
+    const row = result.entities[0] as Record<string, unknown> | undefined;
+
+    const out: Record<string, number> = {};
+    for (const a of aggregates) {
+        const v = row?.[a.alias];
+        out[a.alias] = typeof v === "number" ? v : 0;
+    }
+    return out;
+}

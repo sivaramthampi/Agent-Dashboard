@@ -164,7 +164,12 @@ export async function fetchAgentWrapupMetrics(
 ): Promise<AgentWrapupRow[]> {
     const { combineFilters } = await import("./dataverseUtils");
     const base = combineFilters(f);
-    const query = `?$top=500&$select=_msdyn_activeagentid_value,msdyn_conversationhandletimeinseconds,msdyn_conversationwrapuptimeinseconds,msdyn_customersentimentlabel&$filter=${base} and _msdyn_activeagentid_value ne null`;
+    // NOTE: handle time now mirrors the KPI tile's conversation/session split:
+    //   - msdyn_isagentsession eq false (conversation record) → msdyn_conversationhandletimeinseconds
+    //   - msdyn_isagentsession eq true  (session record)      → talk + active wrap-up + hold
+    // These are raw per-record fields (not aggregates), so the sum below is exact per record —
+    // no denominator-mismatch caveat like the KPI tile's runMultiAggregate approach.
+    const query = `?$top=500&$select=_msdyn_activeagentid_value,msdyn_isagentsession,msdyn_conversationhandletimeinseconds,msdyn_conversationtalktimeinseconds,msdyn_conversationactivewrapuptimeinseconds,msdyn_conversationholdtimeinseconds,msdyn_conversationwrapuptimeinseconds,msdyn_customersentimentlabel&$filter=${base} and _msdyn_activeagentid_value ne null`;
     const result = await webAPI.retrieveMultipleRecords("msdyn_ocliveworkitem", query);
 
     const map = new Map<string, { name: string; handles: number[]; wrapups: number[]; sentiments: number[] }>();
@@ -173,7 +178,23 @@ export async function fetchAgentWrapupMetrics(
         const name = (e["_msdyn_activeagentid_value@OData.Community.Display.V1.FormattedValue"] as string) ?? "Unknown";
         if (!map.has(id)) map.set(id, { name, handles: [], wrapups: [], sentiments: [] });
         const entry = map.get(id)!;
-        const h = e["msdyn_conversationhandletimeinseconds"];
+
+        const isSession = e["msdyn_isagentsession"] === true;
+        let h: unknown;
+        if (isSession) {
+            const talk = e["msdyn_conversationtalktimeinseconds"];
+            const wrap = e["msdyn_conversationactivewrapuptimeinseconds"];
+            const hold = e["msdyn_conversationholdtimeinseconds"];
+            // Only sum if at least one component is a real number; treat missing components as 0
+            // rather than dropping the whole record (a session with no hold time is still valid).
+            if (typeof talk === "number" || typeof wrap === "number" || typeof hold === "number") {
+                h = (typeof talk === "number" ? talk : 0)
+                  + (typeof wrap === "number" ? wrap : 0)
+                  + (typeof hold === "number" ? hold : 0);
+            }
+        } else {
+            h = e["msdyn_conversationhandletimeinseconds"];
+        }
         const w = e["msdyn_conversationwrapuptimeinseconds"];
         if (typeof h === "number") entry.handles.push(h);
         if (typeof w === "number") entry.wrapups.push(w);
