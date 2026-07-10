@@ -15,11 +15,13 @@ import { fetchAgentSnapshot, fetchAgentOptions, deriveAgentRows, deriveAgentsLog
 import { fetchAvgWaitByQueue } from "../data/queueWait";
 import { fetchStatusBreakdown, StatusBreakdownItem } from "../data/statusBreakdown";
 import { fetchTrend, TrendPoint } from "../data/trend";
+import { fetchYesterdayHourlyVolume, HourlyVolumePoint } from "../data/yesterdayVolume";
+import { YesterdayPeakChart } from "./charts/YesterdayPeakChart";
 import { fetchSentimentBreakdown, SentimentBreakdown } from "../data/sentiment";
 import { fetchQueueOptions, fetchUserQueueIds } from "../data/queues";
 import {
     buildDateRangeFilter, buildQueueFilter, buildChannelFilter, buildAgentFilter,
-    formatSeconds, formatMilliseconds, formatPercent, ActiveFilters,
+    formatSeconds, formatMilliseconds, formatPercent, formatDeltaPct, formatDeltaPP, ActiveFilters,
 } from "../data/dataverseUtils";
 
 export interface AppProps {
@@ -81,6 +83,7 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
     const [handleTimeMode, setHandleTimeMode] = useState("conversation");
 
     const [kpi, setKpi] = useState<KpiValues | null>(null);
+    const [kpiYesterday, setKpiYesterday] = useState<KpiValues | null>(null);
     const [kpiError, setKpiError] = useState(false);
     const [kpiRefreshing, setKpiRefreshing] = useState(false);
     const [agentsLoggedInCount, setAgentsLoggedInCount] = useState<number | null>(null);
@@ -101,6 +104,8 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
     const [presenceBreakdown, setPresenceBreakdown] = useState<PresenceBreakdownItem[]>([]);
     const [hourly, setHourly] = useState<TrendPoint[]>([]);
     const [hourlyLoading, setHourlyLoading] = useState(true);
+    const [yesterdayVolume, setYesterdayVolume] = useState<HourlyVolumePoint[]>([]);
+    const [yesterdayVolumeLoading, setYesterdayVolumeLoading] = useState(true);
     const [lastUpdated, setLastUpdated] = useState("Initializing…");
     const [sentimentData, setSentimentData] = useState<SentimentBreakdown | null>(null);
     const [sentimentLoading, setSentimentLoading] = useState(true);
@@ -222,6 +227,10 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
         const agentSel  = getF("agent")?.selectedKeys   ?? new Set<string>();
 
         const { filter: dateFilter } = buildDateRangeFilter(timeK, orgTimezoneBias);
+        const { filter: yesterdayDateFilter } = buildDateRangeFilter("yesterdaySamePeriod", orgTimezoneBias);
+        // Full 00:00–24:00 yesterday window — for the hourly volume/peak-hour chart,
+        // NOT the same-elapsed-time filter used for the KPI "vs yesterday" deltas above.
+        const { filter: yesterdayFullDayFilter } = buildDateRangeFilter("yesterday", orgTimezoneBias);
         const queueFilter   = buildQueueFilter(queueSel, queueAll);
         console.log(
             "%c[AD Queue Filter]",
@@ -233,6 +242,10 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
         const agentFilter   = buildAgentFilter(agentSel);
 
         const activeFilters: ActiveFilters = { dateFilter, queueFilter, channelFilter, agentFilter, channelKeys: channelSel };
+        // Same queue/channel/agent scope, only the date window shifts back 24h —
+        // gives an apples-to-apples "vs yesterday" comparison for the KPI strip.
+        const yesterdayFilters: ActiveFilters = { dateFilter: yesterdayDateFilter, queueFilter, channelFilter, agentFilter, channelKeys: channelSel };
+        const yesterdayFullDayFilters: ActiveFilters = { dateFilter: yesterdayFullDayFilter, queueFilter, channelFilter, agentFilter, channelKeys: channelSel };
         // Hourly chart uses same date scope as all other queries
 
         console.log(
@@ -245,8 +258,9 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
             '\n  Full KPI filter:', [dateFilter, queueFilter, channelFilter, agentFilter].filter(Boolean).join(' and ') || '(no filter)'
         );
 
-        const [kpiR, convR, snapR, waitR, statusR, trendR, sentimentR, wrapupR] = await Promise.allSettled([
+        const [kpiR, kpiYesterdayR, convR, snapR, waitR, statusR, trendR, sentimentR, wrapupR, yesterdayVolR] = await Promise.allSettled([
             fetchKpis(webAPIRef.current, activeFilters),
+            fetchKpis(webAPIRef.current, yesterdayFilters),
             fetchOngoingConversations(webAPIRef.current, activeFilters),
             fetchAgentSnapshot(webAPIRef.current),
             fetchAvgWaitByQueue(webAPIRef.current, activeFilters),
@@ -254,6 +268,7 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
             fetchTrend(webAPIRef.current, activeFilters, "hour"),
             fetchSentimentBreakdown(webAPIRef.current, dateFilter),
             fetchAgentWrapupMetrics(webAPIRef.current, activeFilters, realAgentIds),
+            fetchYesterdayHourlyVolume(webAPIRef.current, yesterdayFullDayFilters, orgTimezoneBias),
         ]);
 
         setKpiRefreshing(false);
@@ -272,6 +287,11 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
                 "| Transfer%:", kpiR.value.transferRatePct.toFixed(1)
             );
         } else { console.error("AgentDashboard: KPI failed", kpiR.reason); setKpiError(true); }
+
+        // Non-critical: on failure, silently keep last known comparison rather than
+        // blanking the delta sub-text or surfacing a second error banner for this.
+        if (kpiYesterdayR.status === "fulfilled") setKpiYesterday(kpiYesterdayR.value);
+        else console.error("AgentDashboard: yesterday KPI comparison failed", kpiYesterdayR.reason);
 
         if (snapR.status === "fulfilled") {
             const s = snapR.value;
@@ -319,6 +339,10 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
         if (wrapupR.status === "fulfilled") setWrapupRows(wrapupR.value);
         else console.error("AgentDashboard: wrapup failed", wrapupR.reason);
         setWrapupLoading(false);
+
+        if (yesterdayVolR.status === "fulfilled") setYesterdayVolume(yesterdayVolR.value);
+        else console.error("AgentDashboard: yesterday hourly volume failed", yesterdayVolR.reason);
+        setYesterdayVolumeLoading(false);
 
         setLastUpdated(new Date().toLocaleTimeString());
     }, [realAgentIds]);
@@ -387,14 +411,28 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
                 sub: `${sentimentData.averageScore >= 0 ? "+" : ""}${sentimentData.averageScore.toFixed(2)} avg score`,
             };
         }
-        if (def.key === "handleTime") return {
-            ...def,
-            displayValue: values.handleTime,
-            toggle: {
-                activeKey: handleTimeMode,
-                options: [{ key:"conversation",label:"Conversation"},{ key:"session",label:"Session"}],
-            },
-        };
+        if (def.key === "handleTime") {
+            const currentHandle = handleTimeMode === "session" ? kpi?.avgHandleTimeSessionSec : kpi?.avgHandleTimeConversationSec;
+            const yesterdayHandle = handleTimeMode === "session" ? kpiYesterday?.avgHandleTimeSessionSec : kpiYesterday?.avgHandleTimeConversationSec;
+            return {
+                ...def,
+                displayValue: values.handleTime,
+                sub: formatDeltaPct(currentHandle, yesterdayHandle),
+                toggle: {
+                    activeKey: handleTimeMode,
+                    options: [{ key:"conversation",label:"Conversation"},{ key:"session",label:"Session"}],
+                },
+            };
+        }
+        if (def.key === "total") return { ...def, displayValue: values.total, sub: formatDeltaPct(kpi?.total, kpiYesterday?.total) };
+        if (def.key === "incoming") return { ...def, displayValue: values.incoming, sub: formatDeltaPct(kpi?.incoming, kpiYesterday?.incoming) };
+        if (def.key === "outgoing") return { ...def, displayValue: values.outgoing, sub: formatDeltaPct(kpi?.outgoing, kpiYesterday?.outgoing) };
+        if (def.key === "engaged") return { ...def, displayValue: values.engaged, sub: formatDeltaPct(kpi?.engaged, kpiYesterday?.engaged) };
+        if (def.key === "queue") return { ...def, displayValue: values.queue, sub: formatDeltaPct(kpi?.inQueue, kpiYesterday?.inQueue) };
+        if (def.key === "abandoned") return { ...def, displayValue: values.abandoned, sub: formatDeltaPP(kpi?.abandonedRatePct, kpiYesterday?.abandonedRatePct) };
+        if (def.key === "speedToAnswer") return { ...def, displayValue: values.speedToAnswer, sub: formatDeltaPct(kpi?.avgSpeedToAnswerMs, kpiYesterday?.avgSpeedToAnswerMs) };
+        if (def.key === "longestWait") return { ...def, displayValue: values.longestWait, sub: formatDeltaPct(kpi?.longestWaitSec, kpiYesterday?.longestWaitSec) };
+        if (def.key === "transferRate") return { ...def, displayValue: values.transferRate, sub: formatDeltaPP(kpi?.transferRatePct, kpiYesterday?.transferRatePct) };
         return { ...def, displayValue: values[def.key] ?? null };
     });
 
@@ -441,6 +479,15 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
                 hourly={hourly} hourlyLoading={hourlyLoading}
                 sentimentData={sentimentData} sentimentLoading={sentimentLoading}
             />
+            <div className="ad-panel ad-chart-panel">
+                <div className="ad-panel-head">
+                    <h3>Yesterday's Conversation Insight</h3>
+                    <span className="ad-panel-meta">By hour</span>
+                </div>
+                <div className="ad-panel-body">
+                    <YesterdayPeakChart points={yesterdayVolume} isLoading={yesterdayVolumeLoading} />
+                </div>
+            </div>
         </div>
     );
 };

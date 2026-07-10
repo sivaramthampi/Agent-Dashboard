@@ -28,6 +28,44 @@ export function formatPercent(value: number | null | undefined): string {
     return `${value.toFixed(1)}%`;
 }
 
+// Same org-timezone shift used by buildDateRangeFilter's midnight calculation, applied
+// to a single record's createdon timestamp instead of "now". Use this anywhere a record
+// needs to be bucketed by hour-of-day in the ORG's local time, not the browser's local
+// time — e.g. yesterdayVolume.ts's peak-hour chart. Using Date.getHours() directly reads
+// the browser's timezone, which silently shifts every bucket if the browser isn't in the
+// org's configured timezone (this was the root cause of the "peak at midnight" bug).
+export function getOrgLocalHour(dateValue: string | Date, orgTimezoneBias?: number): number {
+    const d = typeof dateValue === "string" ? new Date(dateValue) : dateValue;
+    if (orgTimezoneBias === undefined) return d.getHours(); // fallback: browser local time
+    const orgOffsetMs = orgTimezoneBias * 60 * 1000;
+    const shifted = new Date(d.getTime() - orgOffsetMs);
+    return shifted.getUTCHours();
+}
+
+// ── Yesterday-comparison delta formatting ─────────────────────────────────────
+// For counts/durations: relative % change. For values that are ALREADY a
+// percentage (abandon rate, transfer rate), a relative % change of a % is
+// confusing (4%→5% reads as "+25%" which overstates a 1-point move), so those
+// use percentage-POINT delta instead — see formatDeltaPP.
+export function formatDeltaPct(current: number | null | undefined, previous: number | null | undefined): string | undefined {
+    if (current === null || current === undefined || previous === null || previous === undefined) return undefined;
+    if (!previous) return undefined; // avoid divide-by-zero / meaningless "+Infinity%" vs a zero baseline
+    const pct = ((current - previous) / previous) * 100;
+    const rounded = Number(pct.toFixed(1));
+    const arrow = rounded > 0 ? "▲" : rounded < 0 ? "▼" : "→";
+    const sign = rounded > 0 ? "+" : "";
+    return `${arrow} ${sign}${rounded}% vs yesterday`;
+}
+
+export function formatDeltaPP(current: number | null | undefined, previous: number | null | undefined): string | undefined {
+    if (current === null || current === undefined || previous === null || previous === undefined) return undefined;
+    const pp = current - previous;
+    const rounded = Number(pp.toFixed(1));
+    const arrow = rounded > 0 ? "▲" : rounded < 0 ? "▼" : "→";
+    const sign = rounded > 0 ? "+" : "";
+    return `${arrow} ${sign}${rounded}pp vs yesterday`;
+}
+
 // ── Confirmed field facts (verified via console 2026-06-24) ──────────────────
 // msdyn_channel   : Choice field (Edm.Int32 option-set) — NOT null. 
 //                   Value 192340000 = "Entity Records" channel (non-human).
@@ -177,6 +215,16 @@ export function buildDateRangeFilter(
             from = new Date(startOfToday);
             from.setUTCDate(from.getUTCDate() - 1);
             to = new Date(startOfToday);
+            break;
+        }
+        case "yesterdaySamePeriod": {
+            // Same elapsed window as "today so far", shifted back exactly 24h —
+            // e.g. if it's currently 2:00pm, this returns yesterday 12:00am–2:00pm,
+            // so the KPI comparison is apples-to-apples rather than partial-day vs full-day.
+            const elapsedMs = now.getTime() - startOfToday.getTime();
+            from = new Date(startOfToday);
+            from.setUTCDate(from.getUTCDate() - 1);
+            to = new Date(from.getTime() + elapsedMs);
             break;
         }
         case "last2days": {
