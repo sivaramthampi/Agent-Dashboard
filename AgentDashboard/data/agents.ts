@@ -114,12 +114,19 @@ export async function fetchRealAgentIds(webAPI: ComponentFramework.WebApi): Prom
 }
 
 // Filters: isLoggedIn (presence text not in {offline, signed out, not
-// available, ""}) and not one of the explicitly excluded agent GUIDs.
-// realAgentIds param kept for call-site compatibility but not applied.
-export function deriveAgentRows(snapshot: AgentSnapshotEntry[], realAgentIds: Set<string>): AgentRow[] {
+// available, ""}), not one of the explicitly excluded agent GUIDs, and — if
+// the Agent filter has a subset selected — restricted to those agent IDs.
+// Previously this ignored the Agent filter entirely, so selecting a specific
+// agent never changed the Agent List table or presence breakdown.
+function matchesAgentSelection(agentId: string, selectedAgentKeys: Set<string>): boolean {
+    return selectedAgentKeys.size === 0 || selectedAgentKeys.has(agentId);
+}
+
+export function deriveAgentRows(snapshot: AgentSnapshotEntry[], realAgentIds: Set<string>, selectedAgentKeys: Set<string> = new Set<string>()): AgentRow[] {
     return snapshot
         .filter(a => a.isLoggedIn)
         .filter(a => !isExcludedAgentStatus(a.agentStatusId))
+        .filter(a => matchesAgentSelection(a.agentId, selectedAgentKeys))
         .map(a => ({
             id: a.agentId,
             name: a.name,
@@ -131,15 +138,15 @@ export function deriveAgentRows(snapshot: AgentSnapshotEntry[], realAgentIds: Se
         }));
 }
 
-export function deriveAgentsLoggedInCount(snapshot: AgentSnapshotEntry[], realAgentIds: Set<string>): number {
-    return snapshot.filter(a => a.isLoggedIn && !isExcludedAgentStatus(a.agentStatusId)).length;
+export function deriveAgentsLoggedInCount(snapshot: AgentSnapshotEntry[], realAgentIds: Set<string>, selectedAgentKeys: Set<string> = new Set<string>()): number {
+    return snapshot.filter(a => a.isLoggedIn && !isExcludedAgentStatus(a.agentStatusId) && matchesAgentSelection(a.agentId, selectedAgentKeys)).length;
 }
 
 export interface PresenceBreakdownItem { presence: string; count: number; }
 
-export function derivePresenceBreakdown(snapshot: AgentSnapshotEntry[], realAgentIds: Set<string>): PresenceBreakdownItem[] {
+export function derivePresenceBreakdown(snapshot: AgentSnapshotEntry[], realAgentIds: Set<string>, selectedAgentKeys: Set<string> = new Set<string>()): PresenceBreakdownItem[] {
     const counts = new Map<string, number>();
-    for (const a of snapshot.filter(x => x.isLoggedIn && !isExcludedAgentStatus(x.agentStatusId))) {
+    for (const a of snapshot.filter(x => x.isLoggedIn && !isExcludedAgentStatus(x.agentStatusId) && matchesAgentSelection(x.agentId, selectedAgentKeys))) {
         const label = (a.presenceId && CANONICAL_PRESENCE_BY_ID[a.presenceId]) ?? a.presence;
         counts.set(label, (counts.get(label) ?? 0) + 1);
     }
@@ -169,11 +176,15 @@ export async function fetchAgentWrapupMetrics(
     //   - msdyn_isagentsession eq true  (session record)      → talk + active wrap-up + hold
     // These are raw per-record fields (not aggregates), so the sum below is exact per record —
     // no denominator-mismatch caveat like the KPI tile's runMultiAggregate approach.
-    const query = `?$top=500&$select=_msdyn_activeagentid_value,msdyn_isagentsession,msdyn_conversationhandletimeinseconds,msdyn_conversationtalktimeinseconds,msdyn_conversationactivewrapuptimeinseconds,msdyn_conversationholdtimeinseconds,msdyn_conversationwrapuptimeinseconds,msdyn_customersentimentlabel&$filter=${base} and _msdyn_activeagentid_value ne null`;
+    const query = `?$top=500&$select=_msdyn_activeagentid_value,msdyn_isagentsession,msdyn_conversationhandletimeinseconds,msdyn_conversationtalktimeinseconds,msdyn_conversationactivewrapuptimeinseconds,msdyn_conversationholdtimeinseconds,msdyn_conversationwrapuptimeinseconds,msdyn_customersentimentlabel,msdyn_channel&$filter=${base} and _msdyn_activeagentid_value ne null`;
     const result = await webAPI.retrieveMultipleRecords("msdyn_ocliveworkitem", query);
+    const { shouldIncludeChannel } = await import("./dataverseUtils");
 
     const map = new Map<string, { name: string; handles: number[]; wrapups: number[]; sentiments: number[] }>();
     for (const e of result.entities) {
+        const chLabel = e["msdyn_channel@OData.Community.Display.V1.FormattedValue"] as string | undefined;
+        if (!shouldIncludeChannel(chLabel, f.channelKeys ?? new Set())) continue;
+
         const id = e["_msdyn_activeagentid_value"] as string;
         const name = (e["_msdyn_activeagentid_value@OData.Community.Display.V1.FormattedValue"] as string) ?? "Unknown";
         if (!map.has(id)) map.set(id, { name, handles: [], wrapups: [], sentiments: [] });

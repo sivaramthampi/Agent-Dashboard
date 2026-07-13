@@ -266,7 +266,7 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
             fetchAvgWaitByQueue(webAPIRef.current, activeFilters),
             fetchStatusBreakdown(webAPIRef.current, activeFilters),
             fetchTrend(webAPIRef.current, activeFilters, "hour"),
-            fetchSentimentBreakdown(webAPIRef.current, dateFilter),
+            fetchSentimentBreakdown(webAPIRef.current, activeFilters),
             fetchAgentWrapupMetrics(webAPIRef.current, activeFilters, realAgentIds),
             fetchYesterdayHourlyVolume(webAPIRef.current, yesterdayFullDayFilters, orgTimezoneBias),
         ]);
@@ -297,9 +297,9 @@ export const App: React.FC<AppProps> = ({ webAPI, refreshIntervalSeconds, userId
             const s = snapR.value;
             // Only derive when realAgentIds is populated — prevents bots showing on first render
             if (realAgentIds.size > 0) {
-                setAgents(deriveAgentRows(s, realAgentIds));
-                setAgentsLoggedInCount(deriveAgentsLoggedInCount(s, realAgentIds));
-                setPresenceBreakdown(derivePresenceBreakdown(s, realAgentIds));
+                setAgents(deriveAgentRows(s, realAgentIds, agentSel));
+                setAgentsLoggedInCount(deriveAgentsLoggedInCount(s, realAgentIds, agentSel));
+                setPresenceBreakdown(derivePresenceBreakdown(s, realAgentIds, agentSel));
             }
             // Populate agent filter options from snapshot on first load
             // Use all agents (logged in or not) so supervisor can filter by any agent

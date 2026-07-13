@@ -1,4 +1,4 @@
-import { ENTITY_RECORDS_CHANNEL, isBotAgent, formattedValue } from "./dataverseUtils";
+import { ENTITY_RECORDS_CHANNEL, isBotAgent, formattedValue, ActiveFilters, combineFilters, shouldIncludeChannel } from "./dataverseUtils";
 
 // Confirmed choice values from Dataverse field definition
 // These are identifiers only — NOT used as weights
@@ -77,10 +77,15 @@ function calcOverall(avg: number): SentimentGroup {
 
 export async function fetchSentimentBreakdown(
     webAPI: ComponentFramework.WebApi,
-    dateFilter: string
+    f: ActiveFilters
 ): Promise<SentimentBreakdown> {
-    const filter = `${dateFilter} and msdyn_customersentimentlabel ne null`;
-    const query = `?$top=500&$select=msdyn_customersentimentlabel,_msdyn_activeagentid_value&$filter=${filter}`;
+    // Previously this only took dateFilter, so queue/channel/agent selections never
+    // reached the Customer Sentiment tile at all. Queue and agent filter server-side
+    // via the same combineFilters() every other tile uses; channel remains
+    // client-side only (see shouldIncludeChannel / MDL note in dataverseUtils.ts).
+    const base = combineFilters(f);
+    const filter = `${base} and msdyn_customersentimentlabel ne null`;
+    const query = `?$top=500&$select=msdyn_customersentimentlabel,_msdyn_activeagentid_value,msdyn_channel&$filter=${filter}`;
 
     const result = await webAPI.retrieveMultipleRecords("msdyn_ocliveworkitem", query);
     
@@ -94,6 +99,9 @@ export async function fetchSentimentBreakdown(
     for (const e of result.entities) {
         const agent = (formattedValue(e, "_msdyn_activeagentid_value") ?? "").toLowerCase();
         if (isBotAgent(agent)) continue;
+
+        const chLabel = e["msdyn_channel@OData.Community.Display.V1.FormattedValue"] as string | undefined;
+        if (!shouldIncludeChannel(chLabel, f.channelKeys ?? new Set())) continue;
 
         const val = e["msdyn_customersentimentlabel"] as number | undefined | null;
         const group = toGroup(val);

@@ -117,6 +117,17 @@ export function buildChannelFilter(_selectedChannelKeys: Set<string>): string {
     return "";
 }
 
+// True only when a genuine SUBSET of channels is selected (not all, not none —
+// both of those mean "no filter" per shouldIncludeChannel's own rule). Lets a
+// caller choose between a cheap server-side aggregate query (no filter active)
+// and a client-side reduction over raw records (filter active, since channel
+// can't be filtered server-side — see shouldIncludeChannel above).
+export function isChannelFilterActive(selectedChannelKeys: Set<string> | undefined): boolean {
+    if (!selectedChannelKeys) return false;
+    const allKeys = Object.keys(CHANNEL_LABEL_MAP);
+    return selectedChannelKeys.size > 0 && selectedChannelKeys.size < allKeys.length;
+}
+
 // Use this in data files to apply channel filter client-side.
 // Pass e["msdyn_channel@OData.Community.Display.V1.FormattedValue"] as channelLabel.
 export function shouldIncludeChannel(
